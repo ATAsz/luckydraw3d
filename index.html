@@ -1,0 +1,1783 @@
+<!doctype html>
+<html lang="zh-CN">
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>3D抽奖系统 | Lucky Draw</title>
+        <script src="https://cdn.tailwindcss.com"></script>
+        <script src="https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js"></script>
+        <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.9.2/dist/confetti.browser.min.js"></script>
+        <script src="https://cdn.jsdelivr.net/npm/howler@2.2.4/dist/howler.min.js"></script>
+        <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
+        <link
+            rel="stylesheet"
+            href="https://cdnjs.cloudflare.com/ajax/libs/animate.css/4.1.1/animate.min.css"
+        />
+        <style>
+            :root {
+                --bg-color: #000;
+                --card-bg: rgba(0, 127, 127, 0.3);
+                --card-border: rgba(127, 255, 255, 0.25);
+                --card-shadow: rgba(0, 255, 255, 0.5);
+                --text-main: rgba(255, 255, 255, 0.75);
+                --text-sub: rgba(127, 255, 255, 0.75);
+                --text-glow: rgba(0, 255, 255, 0.95);
+            }
+
+            .theme-red {
+                --bg-color: #2a0a0a;
+                --card-bg: rgba(150, 0, 0, 0.5);
+                --card-border: rgba(255, 215, 0, 0.5);
+                --card-shadow: rgba(255, 0, 0, 0.6);
+                --text-main: #fff;
+                --text-sub: rgba(255, 215, 0, 0.9);
+                --text-glow: rgba(255, 200, 0, 0.8);
+            }
+
+            .theme-gold {
+                --bg-color: #0a0a0a;
+                --card-bg: rgba(30, 30, 30, 0.6);
+                --card-border: rgba(212, 175, 55, 0.6);
+                --card-shadow: rgba(212, 175, 55, 0.4);
+                --text-main: #ffd700;
+                --text-sub: #cfb53b;
+                --text-glow: rgba(212, 175, 55, 0.8);
+            }
+
+            .theme-light {
+                --bg-color: #e5e7eb;
+                --card-bg: rgba(255, 255, 255, 0.9);
+                --card-border: rgba(59, 130, 246, 0.5);
+                --card-shadow: rgba(59, 130, 246, 0.3);
+                --text-main: #1e3a8a;
+                --text-sub: #2563eb;
+                --text-glow: rgba(59, 130, 246, 0);
+            }
+
+            .theme-christmas {
+                --bg-color: #0f2815;
+                --card-bg: rgba(22, 101, 52, 0.6);
+                --card-border: rgba(220, 38, 38, 0.6);
+                --card-shadow: rgba(22, 163, 74, 0.5);
+                --text-main: #ffffff;
+                --text-sub: #fca5a5;
+                --text-glow: rgba(255, 255, 255, 0.8);
+            }
+
+            body {
+                margin: 0;
+                overflow: hidden;
+                background-color: var(--bg-color);
+                font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+                transition: background-color 0.5s ease;
+            }
+
+            /* 3D Card Styles */
+            .element {
+                width: 120px;
+                height: 160px;
+                box-shadow: 0px 0px 12px var(--card-shadow);
+                border: 1px solid var(--card-border);
+                font-family: Helvetica, sans-serif;
+                text-align: center;
+                line-height: normal;
+                cursor: default;
+                background-color: var(--card-bg);
+                border-radius: 8px;
+                display: flex;
+                flex-direction: column;
+                justify-content: center;
+                align-items: center;
+                transition:
+                    background-color 0.5s,
+                    box-shadow 0.5s;
+                user-select: none;
+                backface-visibility: hidden;
+            }
+
+            .element:hover {
+                box-shadow: 0px 0px 20px var(--card-shadow);
+                border: 1px solid var(--text-glow);
+            }
+
+            .element .number {
+                position: absolute;
+                top: 10px;
+                right: 10px;
+                font-size: 12px;
+                color: var(--text-sub);
+            }
+
+            .element .symbol {
+                font-size: 24px;
+                font-weight: bold;
+                color: var(--text-main);
+                text-shadow: 0 0 10px var(--text-glow);
+                word-break: break-all;
+                padding: 0 5px;
+            }
+
+            .element .details {
+                font-size: 12px;
+                color: var(--text-sub);
+                margin-top: 10px;
+                max-width: 90%;
+                overflow: hidden;
+                text-overflow: ellipsis;
+                white-space: nowrap;
+            }
+
+            /* Winner Highlight */
+            .element.winner {
+                background-color: rgba(255, 215, 0, 0.8);
+                box-shadow: 0px 0px 20px rgba(255, 215, 0, 0.8);
+                border: 2px solid rgba(255, 255, 255, 1);
+                z-index: 100;
+            }
+
+            .element.winner .symbol,
+            .element.winner .details,
+            .element.winner .number {
+                color: #000;
+                text-shadow: none;
+            }
+
+            /* Custom Scrollbar */
+            ::-webkit-scrollbar {
+                width: 8px;
+            }
+            ::-webkit-scrollbar-track {
+                background: #1f2937;
+            }
+            ::-webkit-scrollbar-thumb {
+                background: #4b5563;
+                border-radius: 4px;
+            }
+            ::-webkit-scrollbar-thumb:hover {
+                background: #6b7280;
+            }
+
+            [v-cloak] {
+                display: none;
+            }
+        </style>
+    </head>
+    <body>
+        <div
+            id="app"
+            v-cloak
+            class="flex h-screen w-screen text-white relative"
+        >
+            <!-- Resizable Sidebar -->
+            <div
+                style="width: 640px"
+                class="bg-gray-900 border-r border-gray-700 flex flex-col z-20 shadow-2xl transition-transform duration-300 absolute md:relative h-full"
+                :class="{'translate-x-0': showSidebar, '-translate-x-full': !showSidebar, 'md:translate-x-0': true}"
+            >
+                <div
+                    class="p-4 border-b border-gray-700 bg-gray-800 flex justify-between items-center"
+                >
+                    <h2 class="text-xl font-bold text-yellow-400">
+                        🏆 中奖记录
+                    </h2>
+                    <div class="flex gap-3">
+                        <button
+                            @click="handleExportHistory"
+                            class="text-xs text-blue-400 hover:text-blue-300 underline"
+                        >
+                            导出
+                        </button>
+                        <button
+                            @click="handleScreenshot"
+                            class="text-xs text-green-400 hover:text-green-300 underline"
+                        >
+                            截图
+                        </button>
+                        <button
+                            @click="handleClearHistory"
+                            class="text-xs text-red-400 hover:text-red-300 underline"
+                        >
+                            清空
+                        </button>
+                    </div>
+                </div>
+                <!-- Stats Dashboard -->
+                <div
+                    class="grid grid-cols-3 gap-2 px-4 py-3 bg-gray-800/50 border-b border-gray-700 backdrop-blur-sm"
+                >
+                    <div class="text-center">
+                        <div class="text-xs text-gray-400 mb-1">总人数</div>
+                        <div class="font-mono font-bold text-blue-400 text-lg">
+                            {{ winnerStats.total }}
+                        </div>
+                    </div>
+                    <div class="text-center border-l border-gray-700">
+                        <div class="text-xs text-gray-400 mb-1">已中奖</div>
+                        <div
+                            class="font-mono font-bold text-yellow-400 text-lg"
+                        >
+                            {{ winnerStats.winners }}
+                        </div>
+                    </div>
+                    <div class="text-center border-l border-gray-700">
+                        <div class="text-xs text-gray-400 mb-1">中奖率</div>
+                        <div class="font-mono font-bold text-green-400 text-lg">
+                            {{ winnerStats.percent }}%
+                        </div>
+                    </div>
+                </div>
+                <div class="flex-1 overflow-y-auto p-4 space-y-4">
+                    <div
+                        v-if="store.history.length === 0"
+                        class="text-gray-500 text-center py-10"
+                    >
+                        暂无中奖记录
+                    </div>
+                    <div
+                        v-for="(record, idx) in store.history"
+                        :key="idx"
+                        class="bg-gray-800 rounded-lg p-3 border border-gray-700 animate__animated animate__fadeInLeft"
+                    >
+                        <div class="flex justify-between items-center mb-2">
+                            <span class="font-bold text-yellow-500"
+                                >{{ record.prizeName }}</span
+                            >
+                            <div class="text-right">
+                                <div class="text-xs text-gray-400">
+                                    {{ record.time }}
+                                </div>
+                                <div
+                                    v-if="record.seed"
+                                    class="text-[10px] text-gray-500 font-mono"
+                                >
+                                    Seed: {{ record.seed }}
+                                </div>
+                            </div>
+                        </div>
+                        <div class="flex flex-wrap gap-2">
+                            <span
+                                v-for="winner in record.winners"
+                                :key="winner.id"
+                                class="bg-gray-700 px-2 py-1 rounded text-sm text-white border border-gray-600"
+                            >
+                                {{ winner.name }}
+                            </span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Main Content -->
+            <div class="flex-1 flex flex-col relative overflow-hidden">
+                <!-- Main Title Banner -->
+                <div
+                    class="absolute top-0 left-0 right-0 z-10 pt-12 pb-20 flex justify-center items-start pointer-events-none bg-gradient-to-b from-black/60 to-transparent"
+                >
+                    <h1
+                        class="text-6xl md:text-7xl font-bold tracking-widest pointer-events-auto cursor-pointer hover:opacity-80 transition-opacity select-none"
+                        style="
+                            color: var(--text-main);
+                            text-shadow: 0 0 30px var(--text-glow);
+                            font-family:
+                                &quot;Microsoft YaHei&quot;, sans-serif;
+                        "
+                        @click="editTitle"
+                        title="点击修改标题"
+                    >
+                        {{ store.config.mainTitle }}
+                    </h1>
+                </div>
+
+                <!-- Mobile Menu Toggle (Top Left) -->
+                <div class="absolute top-4 left-4 z-20">
+                    <button
+                        @click="toggleSidebar"
+                        class="md:hidden pointer-events-auto bg-gray-800 p-2 rounded text-white border border-gray-600 shadow-lg"
+                    >
+                        <svg
+                            class="w-6 h-6"
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24"
+                        >
+                            <path
+                                stroke-linecap="round"
+                                stroke-linejoin="round"
+                                stroke-width="2"
+                                d="M4 6h16M4 12h16M4 18h16"
+                            ></path>
+                        </svg>
+                    </button>
+                </div>
+
+                <!-- Algorithm Info Button (Bottom Right) -->
+                <button
+                    @click="showAlgoInfo = true"
+                    class="absolute bottom-4 right-4 z-10 w-10 h-10 bg-gray-900/80 backdrop-blur-md rounded-full border border-gray-600 text-gray-300 hover:text-white hover:border-gray-400 shadow-lg flex items-center justify-center transition-all hover:scale-110"
+                    title="公平性说明"
+                >
+                    <svg
+                        class="w-5 h-5"
+                        fill="currentColor"
+                        viewBox="0 0 20 20"
+                    >
+                        <path
+                            fill-rule="evenodd"
+                            d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z"
+                            clip-rule="evenodd"
+                        ></path>
+                    </svg>
+                </button>
+
+                <!-- Algorithm Info Modal -->
+                <div
+                    v-if="showAlgoInfo"
+                    class="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm animate__animated animate__fadeIn"
+                    @click.self="showAlgoInfo = false"
+                >
+                    <div
+                        class="bg-gray-900 rounded-xl border border-gray-700 p-6 max-w-md mx-4 shadow-2xl animate__animated animate__zoomIn"
+                    >
+                        <div class="flex justify-between items-center mb-4">
+                            <h4
+                                class="text-lg font-bold text-white flex items-center gap-2"
+                            >
+                                <span>🔐</span> 公平性说明
+                            </h4>
+                            <button
+                                @click="showAlgoInfo = false"
+                                class="text-gray-400 hover:text-white text-2xl leading-none"
+                            >
+                                &times;
+                            </button>
+                        </div>
+                        <div
+                            class="space-y-3 text-sm text-gray-300 leading-relaxed"
+                        >
+                            <p>
+                                <span class="text-blue-400 font-medium"
+                                    >随机算法：</span
+                                >
+                                本系统采用
+                                <span class="text-yellow-400 font-mono"
+                                    >Mulberry32</span
+                                >
+                                伪随机数生成器，配合
+                                <span class="text-yellow-400 font-mono"
+                                    >Cyrb128</span
+                                >
+                                哈希函数将种子转换为数值。
+                            </p>
+                            <p>
+                                <span class="text-blue-400 font-medium"
+                                    >种子作用：</span
+                                >
+                                相同的种子 + 相同的名单 = 相同的中奖结果。
+                                您可以公开种子供事后验证，确保结果可复现、不可篡改。
+                            </p>
+                            <p>
+                                <span class="text-blue-400 font-medium"
+                                    >洗牌算法：</span
+                                >
+                                使用
+                                <span class="text-yellow-400 font-mono"
+                                    >Fisher-Yates</span
+                                >
+                                标准洗牌算法，保证每个人被抽中的概率完全相等。
+                            </p>
+                            <p
+                                class="text-gray-400 pt-3 border-t border-gray-700 mt-3"
+                            >
+                                💡
+                                建议：可使用当天股票指数、时间戳等公开数据作为种子，增强公信力。
+                            </p>
+                            <p>
+                                <span
+                                    >本程序由 Chris杨 在Zed中使用 Gemini 3 Pro
+                                    和 Claude Opus 4.5 开发。</span
+                                >
+                            </p>
+                        </div>
+                        <button
+                            @click="showAlgoInfo = false"
+                            class="mt-5 w-full bg-blue-600 hover:bg-blue-500 text-white py-2 rounded-lg transition-colors"
+                        >
+                            我知道了
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Theme Switcher (Top Right) -->
+                <div class="absolute top-4 right-4 z-20 group">
+                    <button
+                        class="bg-gray-800/80 backdrop-blur text-white px-3 py-2 rounded-lg border border-gray-600 shadow-lg flex items-center gap-2 hover:bg-gray-700 transition-colors"
+                    >
+                        <span>🎨 主题切换</span>
+                    </button>
+                    <!-- Dropdown -->
+                    <div
+                        class="absolute right-0 top-full pt-2 w-32 hidden group-hover:block animate__animated animate__fadeIn"
+                    >
+                        <div
+                            class="bg-gray-900/90 backdrop-blur border border-gray-700 rounded-lg shadow-xl overflow-hidden"
+                        >
+                            <button
+                                @click="store.config.theme = 'theme-cyber'"
+                                class="w-full text-left px-4 py-2 text-sm hover:bg-gray-800 text-blue-400 transition-colors"
+                            >
+                                科技蓝
+                            </button>
+                            <button
+                                @click="store.config.theme = 'theme-red'"
+                                class="w-full text-left px-4 py-2 text-sm hover:bg-gray-800 text-red-400 transition-colors"
+                            >
+                                喜庆红
+                            </button>
+                            <button
+                                @click="store.config.theme = 'theme-gold'"
+                                class="w-full text-left px-4 py-2 text-sm hover:bg-gray-800 text-yellow-400 transition-colors"
+                            >
+                                黑金风
+                            </button>
+                            <button
+                                @click="store.config.theme = 'theme-light'"
+                                class="w-full text-left px-4 py-2 text-sm hover:bg-gray-800 text-gray-200 transition-colors"
+                            >
+                                简约白
+                            </button>
+                            <button
+                                @click="store.config.theme = 'theme-christmas'"
+                                class="w-full text-left px-4 py-2 text-sm hover:bg-gray-800 text-green-400 transition-colors"
+                            >
+                                圣诞绿
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Bottom Control Dock -->
+                <div
+                    class="absolute bottom-10 left-0 right-0 z-20 flex justify-center pointer-events-none px-4"
+                >
+                    <!-- Configuration Panel -->
+                    <div
+                        class="bg-gray-900/90 backdrop-blur-md px-6 py-4 rounded-2xl border border-gray-700 shadow-2xl pointer-events-auto flex flex-wrap gap-4 items-center justify-center transform transition-all hover:scale-[1.02]"
+                    >
+                        <div class="flex flex-col gap-1">
+                            <label class="text-xs text-gray-400"
+                                >奖项名称</label
+                            >
+                            <input
+                                v-model="store.config.prizeName"
+                                type="text"
+                                class="bg-gray-800 border border-gray-600 rounded px-3 py-1 text-sm focus:outline-none focus:border-blue-500 w-32 text-white placeholder-gray-500"
+                            />
+                        </div>
+
+                        <div class="flex flex-col gap-1">
+                            <label class="text-xs text-gray-400"
+                                >抽取数量</label
+                            >
+                            <input
+                                v-model.number="store.config.count"
+                                type="number"
+                                min="1"
+                                max="50"
+                                class="bg-gray-800 border border-gray-600 rounded px-3 py-1 text-sm focus:outline-none focus:border-blue-500 w-20 text-white"
+                            />
+                        </div>
+
+                        <div class="flex flex-col gap-1">
+                            <label class="text-xs text-gray-400"
+                                >随机种子</label
+                            >
+                            <div class="flex">
+                                <input
+                                    v-model="store.config.seed"
+                                    type="text"
+                                    class="bg-gray-800 border border-r-0 border-gray-600 rounded-l px-2 py-1 text-sm focus:outline-none focus:border-blue-500 w-24 text-white font-mono uppercase"
+                                />
+                                <button
+                                    @click="regenerateSeed"
+                                    class="bg-gray-700 border border-gray-600 hover:bg-gray-600 rounded-r px-2 text-gray-300"
+                                    title="生成新种子"
+                                >
+                                    🎲
+                                </button>
+                            </div>
+                        </div>
+
+                        <div class="flex items-center gap-2 mb-2 h-8">
+                            <input
+                                v-model="store.config.exclude"
+                                id="exclude"
+                                type="checkbox"
+                                class="w-4 h-4 rounded bg-gray-700 border-gray-600 text-blue-500"
+                            />
+                            <label
+                                for="exclude"
+                                class="text-sm cursor-pointer select-none text-gray-300"
+                                >排除已中奖</label
+                            >
+                        </div>
+
+                        <div class="flex items-center gap-2 mb-2 h-8">
+                            <input
+                                v-model="store.config.soundEnabled"
+                                id="soundEnabled"
+                                type="checkbox"
+                                class="w-4 h-4 rounded bg-gray-700 border-gray-600 text-blue-500"
+                                @change="toggleSound"
+                            />
+                            <label
+                                for="soundEnabled"
+                                class="text-sm cursor-pointer select-none text-gray-300"
+                                >🔊 音效</label
+                            >
+                        </div>
+
+                        <div class="flex gap-2">
+                            <button
+                                @click="toggleRunning"
+                                :class="store.isRunning ? 'bg-red-600 hover:bg-red-700' : 'bg-blue-600 hover:bg-blue-700'"
+                                class="px-6 py-1.5 rounded font-bold transition-colors shadow-lg min-w-[100px] text-white"
+                            >
+                                {{ store.isRunning ? '停止' : '开始抽奖' }}
+                            </button>
+
+                            <button
+                                @click="showSettings = true"
+                                class="px-3 py-1.5 bg-gray-700 hover:bg-gray-600 rounded transition-colors text-sm text-white"
+                            >
+                                ⚙️ 设置/数据
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 3D Container -->
+                <div id="container" class="w-full h-full"></div>
+
+                <!-- Winners Modal Overlay -->
+                <div
+                    v-if="store.currentWinners.length > 0 && !store.isRunning"
+                    class="absolute inset-0 z-30 flex items-center justify-center bg-black/80 backdrop-blur-sm animate__animated animate__fadeIn"
+                >
+                    <div
+                        class="bg-gradient-to-br from-red-900 to-gray-900 p-8 rounded-2xl border-2 border-yellow-500 shadow-[0_0_50px_rgba(255,215,0,0.3)] max-w-5xl w-full mx-4 text-center relative"
+                    >
+                        <h2
+                            class="text-5xl font-bold text-yellow-400 mb-2 animate__animated animate__bounceIn"
+                            style="text-shadow: 0 0 20px rgba(255, 215, 0, 0.5)"
+                        >
+                            🎉 恭喜中奖 🎉
+                        </h2>
+                        <h3
+                            class="text-3xl text-white mb-8 font-light tracking-wide"
+                        >
+                            {{ store.config.prizeName }}
+                        </h3>
+
+                        <div
+                            class="flex flex-wrap justify-center gap-6 mb-8 max-h-[60vh] overflow-y-auto p-4"
+                        >
+                            <div
+                                v-for="(winner, idx) in store.currentWinners"
+                                :key="winner.id"
+                                class="animate__animated animate__flipInX"
+                                :style="{animationDelay: idx * 100 + 'ms'}"
+                            >
+                                <div
+                                    class="w-40 h-52 bg-gradient-to-b from-yellow-500/20 to-transparent border-2 border-yellow-400 rounded-xl flex flex-col items-center justify-center p-3 relative overflow-hidden shadow-lg transform hover:scale-105 transition-transform duration-300"
+                                >
+                                    <div
+                                        class="absolute inset-0 bg-yellow-400/5"
+                                    ></div>
+                                    <div
+                                        class="w-16 h-16 bg-yellow-400 rounded-full mb-3 flex items-center justify-center text-black text-2xl font-bold"
+                                    >
+                                        {{ winner.name.substring(0,1) }}
+                                    </div>
+                                    <span
+                                        class="text-2xl font-bold text-white mb-2 z-10"
+                                        >{{ winner.name }}</span
+                                    >
+                                    <span
+                                        class="text-sm text-yellow-200 z-10 bg-black/30 px-2 py-1 rounded"
+                                        >{{ winner.info || '幸运儿' }}</span
+                                    >
+                                </div>
+                            </div>
+                        </div>
+
+                        <button
+                            @click="closeWinnersModal"
+                            class="px-10 py-3 bg-gradient-to-r from-yellow-500 to-yellow-600 hover:from-yellow-400 hover:to-yellow-500 text-black font-bold rounded-full text-xl shadow-[0_0_20px_rgba(255,215,0,0.5)] transition-all transform hover:scale-105 active:scale-95"
+                        >
+                            继续抽奖
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Settings/Data Modal -->
+                <div
+                    v-if="showSettings"
+                    class="absolute inset-0 z-40 bg-black/90 flex items-center justify-center p-4"
+                >
+                    <div
+                        class="bg-gray-800 rounded-xl max-w-2xl w-full p-6 shadow-2xl border border-gray-700 animate__animated animate__fadeInDown"
+                    >
+                        <div
+                            class="flex justify-between items-center mb-6 border-b border-gray-700 pb-4"
+                        >
+                            <h2 class="text-2xl font-bold text-white">
+                                ⚙️ 数据管理
+                            </h2>
+                            <button
+                                @click="showSettings = false"
+                                class="text-gray-400 hover:text-white text-2xl"
+                            >
+                                &times;
+                            </button>
+                        </div>
+
+                        <div class="space-y-6">
+                            <!-- Import -->
+                            <div
+                                class="border border-gray-700 rounded-lg p-4 bg-gray-900/50"
+                            >
+                                <h3
+                                    class="font-bold text-blue-400 mb-2 flex items-center gap-2"
+                                >
+                                    📥 导入数据
+                                </h3>
+                                <div
+                                    class="flex flex-col sm:flex-row gap-4 items-start sm:items-center"
+                                >
+                                    <label
+                                        class="cursor-pointer bg-blue-600 hover:bg-blue-500 px-4 py-2 rounded text-sm transition-colors text-white font-medium shadow-lg hover:shadow-blue-500/30"
+                                    >
+                                        选择 Excel / TXT 文件
+                                        <input
+                                            type="file"
+                                            @change="handleFileUpload"
+                                            class="hidden"
+                                            accept=".xlsx,.xls,.txt,.csv"
+                                        />
+                                    </label>
+                                    <span
+                                        class="text-xs text-gray-500 leading-relaxed"
+                                    >
+                                        Excel: 第一列为姓名，第二列为部门/信息
+                                        (可选)<br />
+                                        TXT: 纯文本，每行一个姓名
+                                    </span>
+                                </div>
+                            </div>
+
+                            <!-- Manual Input -->
+                            <div
+                                class="border border-gray-700 rounded-lg p-4 bg-gray-900/50"
+                            >
+                                <h3 class="font-bold text-green-400 mb-2">
+                                    ✍️ 手动录入
+                                </h3>
+                                <textarea
+                                    v-model="manualInput"
+                                    rows="4"
+                                    placeholder="输入姓名，每行一个。例如：&#10;张三&#10;李四"
+                                    class="w-full bg-gray-800 border border-gray-600 rounded p-2 text-sm focus:border-blue-500 focus:outline-none mb-2 text-white"
+                                ></textarea>
+                                <div class="flex justify-end">
+                                    <button
+                                        @click="handleManualAdd"
+                                        class="bg-green-600 hover:bg-green-500 px-4 py-2 rounded text-sm text-white font-medium shadow-lg"
+                                    >
+                                        添加名单
+                                    </button>
+                                </div>
+                            </div>
+
+                            <!-- Data Summary -->
+                            <div
+                                class="flex justify-between items-center border-t border-gray-700 pt-4"
+                            >
+                                <div>
+                                    <p class="text-gray-300">
+                                        当前总人数:
+                                        <span
+                                            class="text-blue-400 font-bold text-lg"
+                                            >{{ winnerStats.total }}</span
+                                        >
+                                    </p>
+                                    <p class="text-xs text-gray-500">
+                                        已中奖: {{ winnerStats.winners }} 人 ({{
+                                        winnerStats.percent }}%)
+                                    </p>
+                                </div>
+                                <button
+                                    @click="handleReset"
+                                    class="text-red-500 text-sm hover:text-red-400 border border-red-900 hover:border-red-500 px-3 py-1 rounded transition-colors"
+                                >
+                                    重置所有数据
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Import Maps for Modules -->
+        <script type="importmap">
+            {
+                "imports": {
+                    "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+                    "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+                }
+            }
+        </script>
+
+        <script type="module">
+            import * as THREE from "three";
+            import {
+                CSS3DRenderer,
+                CSS3DObject,
+            } from "three/addons/renderers/CSS3DRenderer.js";
+            import {
+                createApp,
+                ref,
+                reactive,
+                computed,
+                onMounted,
+                watch,
+                nextTick,
+            } from "https://unpkg.com/vue@3/dist/vue.esm-browser.js";
+
+            // --- STORE MODULE ---
+            const STORAGE_KEY = "lucky_draw_data_v2";
+
+            // Pseudo-Random Number Generator (Mulberry32)
+            function mulberry32(a) {
+                return function () {
+                    var t = (a += 0x6d2b79f5);
+                    t = Math.imul(t ^ (t >>> 15), t | 1);
+                    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+                    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+                };
+            }
+
+            // String to Seed Number
+            function cyrb128(str) {
+                let h1 = 1779033703,
+                    h2 = 3144134277,
+                    h3 = 1013904242,
+                    h4 = 2773480762;
+                for (let i = 0, k; i < str.length; i++) {
+                    k = str.charCodeAt(i);
+                    h1 = h2 ^ Math.imul(h1 ^ k, 597399067);
+                    h2 = h3 ^ Math.imul(h2 ^ k, 2869860233);
+                    h3 = h4 ^ Math.imul(h3 ^ k, 951274213);
+                    h4 = h1 ^ Math.imul(h4 ^ k, 2716044179);
+                }
+                h1 = Math.imul(h3 ^ (h1 >>> 18), 597399067);
+                h2 = Math.imul(h4 ^ (h2 >>> 22), 2869860233);
+                h3 = Math.imul(h1 ^ (h3 >>> 17), 951274213);
+                h4 = Math.imul(h2 ^ (h4 >>> 19), 2716044179);
+                return (h1 ^ h2 ^ h3 ^ h4) >>> 0;
+            }
+
+            const store = reactive({
+                users: [], // { id, name, info, status: 0|1 }
+                history: [], // { time, prizeName, winners: [] }
+                config: {
+                    prizeName: "三等奖",
+                    count: 5,
+                    exclude: true,
+                    seed: Math.random().toString(36).slice(2, 8).toUpperCase(),
+                    theme: "theme-cyber",
+                    mainTitle: "幸运大抽奖",
+                    soundEnabled: true,
+                },
+                // UI State
+                isRunning: false,
+                currentWinners: [],
+            });
+
+            // -- Persistence --
+            function loadData() {
+                const saved = localStorage.getItem(STORAGE_KEY);
+                if (saved) {
+                    try {
+                        const data = JSON.parse(saved);
+                        store.users = data.users || [];
+                        store.history = data.history || [];
+                        if (data.config)
+                            Object.assign(store.config, data.config);
+                    } catch (e) {
+                        console.error("Load error", e);
+                    }
+                }
+
+                // Demo data if empty
+                if (store.users.length === 0) {
+                    generateDemoData();
+                }
+            }
+
+            function saveData() {
+                localStorage.setItem(
+                    STORAGE_KEY,
+                    JSON.stringify({
+                        users: store.users,
+                        history: store.history,
+                        config: store.config,
+                    }),
+                );
+            }
+
+            function generateDemoData() {
+                const depts = [
+                    "技术部",
+                    "市场部",
+                    "人事部",
+                    "财务部",
+                    "运营部",
+                ];
+                for (let i = 1; i <= 60; i++) {
+                    store.users.push({
+                        id: Date.now() + i,
+                        name: `员工${i}`,
+                        info: depts[i % depts.length],
+                        status: 0,
+                    });
+                }
+            }
+
+            // Watch for changes to save automatically
+            watch(() => [store.users, store.history, store.config], saveData, {
+                deep: true,
+            });
+
+            // -- Actions --
+
+            function resetAllData() {
+                store.users = [];
+                store.history = [];
+                store.currentWinners = [];
+                saveData();
+            }
+
+            function clearHistory() {
+                store.history = [];
+                store.users.forEach((u) => (u.status = 0));
+                saveData();
+            }
+
+            function addUsers(newUsers) {
+                store.users = [...store.users, ...newUsers];
+                saveData();
+            }
+
+            function replaceUsers(newUsers) {
+                store.users = newUsers;
+                saveData();
+            }
+
+            function performDraw() {
+                let pool = store.users;
+                if (store.config.exclude) {
+                    pool = pool.filter((u) => u.status === 0);
+                }
+
+                if (pool.length === 0) {
+                    return {
+                        success: false,
+                        message: "没有符合条件的用户可抽！",
+                    };
+                }
+
+                // Seeded Shuffle (Fisher-Yates)
+                const seedVal = cyrb128(String(store.config.seed || "DEFAULT"));
+                const rng = mulberry32(seedVal);
+
+                // Clone pool to avoid modifying original array order in place incorrectly if referenced elsewhere
+                // (though filter returns new array, so it's safe)
+                for (let i = pool.length - 1; i > 0; i--) {
+                    const j = Math.floor(rng() * (i + 1));
+                    [pool[i], pool[j]] = [pool[j], pool[i]];
+                }
+
+                const count = Math.min(store.config.count, pool.length);
+                const winners = pool.slice(0, count);
+
+                // Mark winners
+                winners.forEach((w) => {
+                    const realUser = store.users.find((u) => u.id === w.id);
+                    if (realUser) realUser.status = 1;
+                });
+
+                // Record history
+                const record = {
+                    time: new Date().toLocaleTimeString(),
+                    prizeName: store.config.prizeName,
+                    winners: winners,
+                    seed: store.config.seed,
+                };
+                store.history.unshift(record);
+
+                store.currentWinners = winners;
+
+                // Trigger celebration animation
+                triggerCelebration();
+
+                // Auto-generate new seed for next round
+                store.config.seed = Math.random()
+                    .toString(36)
+                    .slice(2, 8)
+                    .toUpperCase();
+
+                saveData();
+
+                return { success: true, winners };
+            }
+
+            // --- SOUND MODULE ---
+            let spinSound = null;
+            let winSound = null;
+            let soundEnabled = true;
+
+            function initSounds() {
+                // Drum roll / spinning sound (looped)
+                spinSound = new Howl({
+                    src: [
+                        "https://assets.mixkit.co/active_storage/sfx/2003/2003-preview.mp3",
+                    ],
+                    loop: true,
+                    volume: 0.5,
+                    html5: true,
+                });
+
+                // Victory / celebration sound
+                winSound = new Howl({
+                    src: [
+                        "https://assets.mixkit.co/active_storage/sfx/1435/1435-preview.mp3",
+                    ],
+                    volume: 0.6,
+                    html5: true,
+                });
+            }
+
+            function playSpinSound() {
+                if (!soundEnabled || !spinSound) return;
+                spinSound.play();
+            }
+
+            function stopSpinSound() {
+                if (!spinSound) return;
+                spinSound.fade(0.5, 0, 500);
+                setTimeout(() => spinSound.stop(), 500);
+            }
+
+            function playWinSound() {
+                if (!soundEnabled || !winSound) return;
+                winSound.play();
+            }
+
+            // --- CELEBRATION MODULE ---
+            function triggerCelebration() {
+                const duration = 4000;
+                const animationEnd = Date.now() + duration;
+                const defaults = {
+                    startVelocity: 30,
+                    spread: 360,
+                    ticks: 60,
+                    zIndex: 9999,
+                };
+
+                function randomInRange(min, max) {
+                    return Math.random() * (max - min) + min;
+                }
+
+                // Continuous confetti burst
+                const interval = setInterval(function () {
+                    const timeLeft = animationEnd - Date.now();
+
+                    if (timeLeft <= 0) {
+                        return clearInterval(interval);
+                    }
+
+                    const particleCount = 50 * (timeLeft / duration);
+
+                    // Confetti from left side
+                    confetti({
+                        ...defaults,
+                        particleCount,
+                        origin: {
+                            x: randomInRange(0.1, 0.3),
+                            y: Math.random() - 0.2,
+                        },
+                        colors: [
+                            "#ff0000",
+                            "#ffd700",
+                            "#ff6347",
+                            "#ff1493",
+                            "#00ff00",
+                        ],
+                    });
+
+                    // Confetti from right side
+                    confetti({
+                        ...defaults,
+                        particleCount,
+                        origin: {
+                            x: randomInRange(0.7, 0.9),
+                            y: Math.random() - 0.2,
+                        },
+                        colors: [
+                            "#ff0000",
+                            "#ffd700",
+                            "#ff6347",
+                            "#ff1493",
+                            "#00ff00",
+                        ],
+                    });
+                }, 250);
+
+                // Big center burst at start
+                confetti({
+                    particleCount: 150,
+                    spread: 100,
+                    origin: { x: 0.5, y: 0.5 },
+                    zIndex: 9999,
+                    colors: [
+                        "#FFD700",
+                        "#FF6347",
+                        "#00CED1",
+                        "#FF1493",
+                        "#32CD32",
+                    ],
+                });
+
+                // Firework-style bursts
+                setTimeout(() => {
+                    confetti({
+                        particleCount: 80,
+                        angle: 60,
+                        spread: 55,
+                        origin: { x: 0 },
+                        zIndex: 9999,
+                    });
+                }, 500);
+
+                setTimeout(() => {
+                    confetti({
+                        particleCount: 80,
+                        angle: 120,
+                        spread: 55,
+                        origin: { x: 1 },
+                        zIndex: 9999,
+                    });
+                }, 700);
+
+                // Stars and circles
+                setTimeout(() => {
+                    confetti({
+                        particleCount: 100,
+                        spread: 160,
+                        origin: { x: 0.5, y: 0.3 },
+                        shapes: ["circle", "square"],
+                        colors: ["#FFD700", "#FFA500", "#FF4500"],
+                        scalar: 1.2,
+                        zIndex: 9999,
+                    });
+                }, 1000);
+            }
+
+            // --- VISUALS MODULE ---
+            let camera, scene, renderer;
+            let group;
+            let isVisualRunning = false;
+            let container;
+            let isDragging = false;
+            let previousMousePosition = { x: 0, y: 0 };
+            let autoRotate = true;
+
+            function init3D(containerId, users) {
+                container = document.getElementById(containerId);
+
+                // Camera setup
+                const aspect = container.clientWidth / container.clientHeight;
+                camera = new THREE.PerspectiveCamera(40, aspect, 1, 10000);
+                camera.position.z = 2800;
+
+                scene = new THREE.Scene();
+
+                // Renderer setup
+                renderer = new CSS3DRenderer();
+                renderer.setSize(container.clientWidth, container.clientHeight);
+                container.appendChild(renderer.domElement);
+
+                group = new THREE.Group();
+                scene.add(group);
+
+                // Initial population
+                updateTargets(users);
+
+                // Handle resize
+                window.addEventListener("resize", handleResize);
+
+                // Mouse drag interaction
+                container.addEventListener("mousedown", onMouseDown);
+                container.addEventListener("mousemove", onMouseMove);
+                container.addEventListener("mouseup", onMouseUp);
+                container.addEventListener("mouseleave", onMouseUp);
+
+                // Start loop
+                animate();
+            }
+
+            function onMouseDown(e) {
+                if (isVisualRunning) return; // Disable drag during lottery
+                isDragging = true;
+                autoRotate = false;
+                previousMousePosition = { x: e.clientX, y: e.clientY };
+            }
+
+            function onMouseMove(e) {
+                if (!isDragging || !group) return;
+
+                const deltaX = e.clientX - previousMousePosition.x;
+                const deltaY = e.clientY - previousMousePosition.y;
+
+                group.rotation.y += deltaX * 0.005;
+                group.rotation.x += deltaY * 0.005;
+
+                // Clamp X rotation to prevent flipping
+                group.rotation.x = Math.max(
+                    -Math.PI / 3,
+                    Math.min(Math.PI / 3, group.rotation.x),
+                );
+
+                previousMousePosition = { x: e.clientX, y: e.clientY };
+            }
+
+            function onMouseUp() {
+                isDragging = false;
+                // Resume auto rotation after 2 seconds of inactivity
+                setTimeout(() => {
+                    if (!isDragging && !isVisualRunning) {
+                        autoRotate = true;
+                    }
+                }, 2000);
+            }
+
+            function handleResize() {
+                if (!camera || !renderer || !container) return;
+
+                const width = container.clientWidth;
+                const height = container.clientHeight;
+
+                camera.aspect = width / height;
+                camera.updateProjectionMatrix();
+                renderer.setSize(width, height);
+            }
+
+            function setRunning(state) {
+                isVisualRunning = state;
+            }
+
+            function updateTargets(users) {
+                // Clear existing
+                if (!group) return;
+
+                // Remove all children
+                while (group.children.length > 0) {
+                    // Safe removal for CSS3DObject (they are DOM elements)
+                    const obj = group.children[0];
+                    if (obj.element && obj.element.parentNode) {
+                        obj.element.parentNode.removeChild(obj.element);
+                    }
+                    group.remove(obj);
+                }
+
+                const count = users.length;
+                const vector = new THREE.Vector3();
+
+                // Optimized radius for density
+                // Base radius 450, grows with square root of count to maintain surface density
+                const radius = Math.max(450, Math.sqrt(count) * 65);
+
+                for (let i = 0; i < count; i++) {
+                    const user = users[i];
+
+                    const element = document.createElement("div");
+                    element.className = "element";
+                    if (user.status === 1) element.classList.add("winner");
+
+                    const number = document.createElement("div");
+                    number.className = "number";
+                    number.textContent = i + 1;
+                    element.appendChild(number);
+
+                    const symbol = document.createElement("div");
+                    symbol.className = "symbol";
+                    symbol.textContent = user.name;
+                    element.appendChild(symbol);
+
+                    const details = document.createElement("div");
+                    details.className = "details";
+                    details.textContent = user.info || "";
+                    element.appendChild(details);
+
+                    const objectCSS = new CSS3DObject(element);
+
+                    // Fibonacci Sphere Algorithm
+                    const phi = Math.acos(-1 + (2 * i) / count);
+                    const theta = Math.sqrt(count * Math.PI) * phi;
+
+                    objectCSS.position.setFromSphericalCoords(
+                        radius,
+                        phi,
+                        theta,
+                    );
+
+                    // Make card face outward from sphere center
+                    vector.copy(objectCSS.position).multiplyScalar(2);
+                    objectCSS.lookAt(vector);
+
+                    // Correct the up direction: rotate around the look axis
+                    // to make the card's top point toward world Y+
+                    const up = new THREE.Vector3(0, 1, 0);
+                    const forward = new THREE.Vector3()
+                        .subVectors(vector, objectCSS.position)
+                        .normalize();
+                    const right = new THREE.Vector3()
+                        .crossVectors(up, forward)
+                        .normalize();
+                    const correctedUp = new THREE.Vector3()
+                        .crossVectors(forward, right)
+                        .normalize();
+
+                    const rotationMatrix = new THREE.Matrix4();
+                    rotationMatrix.makeBasis(right, correctedUp, forward);
+                    objectCSS.quaternion.setFromRotationMatrix(rotationMatrix);
+
+                    group.add(objectCSS);
+                }
+            }
+
+            function animate() {
+                requestAnimationFrame(animate);
+
+                if (group) {
+                    if (isVisualRunning) {
+                        group.rotation.y += 0.05;
+                        // Smooth Zoom In
+                        camera.position.z = THREE.MathUtils.lerp(
+                            camera.position.z,
+                            1800,
+                            0.05,
+                        );
+                        // Reset X rotation smoothly during lottery
+                        group.rotation.x = THREE.MathUtils.lerp(
+                            group.rotation.x,
+                            0,
+                            0.05,
+                        );
+                    } else {
+                        // Auto rotate only when not dragging
+                        if (autoRotate && !isDragging) {
+                            group.rotation.y += 0.002;
+                        }
+                        // Smooth Zoom Out
+                        camera.position.z = THREE.MathUtils.lerp(
+                            camera.position.z,
+                            2800,
+                            0.05,
+                        );
+                    }
+                }
+
+                renderer.render(scene, camera);
+            }
+
+            // --- MAIN APP ---
+            const app = createApp({
+                setup() {
+                    const showSidebar = ref(true); // Default open
+                    const showSettings = ref(false);
+                    const showAlgoInfo = ref(false);
+                    const manualInput = ref("");
+
+                    // -- Computed for UI --
+                    const winnerStats = computed(() => {
+                        const total = store.users.length;
+                        const winners = store.users.filter(
+                            (u) => u.status === 1,
+                        ).length;
+                        const percent =
+                            total > 0
+                                ? ((winners / total) * 100).toFixed(1)
+                                : "0.0";
+                        return { total, winners, percent };
+                    });
+
+                    // -- Actions --
+
+                    const toggleSidebar = () => {
+                        showSidebar.value = !showSidebar.value;
+                        // Wait for transition
+                        setTimeout(() => {
+                            handleResize();
+                        }, 350);
+                    };
+
+                    const toggleRunning = () => {
+                        if (store.isRunning) {
+                            // Stop
+                            stopSpinSound();
+                            const result = performDraw();
+                            if (!result.success) {
+                                alert(result.message);
+                                store.isRunning = false;
+                                setRunning(false);
+                            } else {
+                                store.isRunning = false;
+                                setRunning(false);
+                                // Update visuals to show winners
+                                updateTargets(store.users);
+                                // Play win sound
+                                playWinSound();
+                            }
+                        } else {
+                            // Start
+                            if (store.users.length === 0) {
+                                alert("没有用户数据！");
+                                return;
+                            }
+                            store.isRunning = true;
+                            setRunning(true);
+                            // Play spinning sound
+                            playSpinSound();
+                            // Clear current winners display when starting new draw
+                            store.currentWinners = [];
+                        }
+                    };
+
+                    const closeWinnersModal = () => {
+                        store.currentWinners = [];
+                    };
+
+                    const regenerateSeed = () => {
+                        store.config.seed = Math.random()
+                            .toString(36)
+                            .slice(2, 8)
+                            .toUpperCase();
+                    };
+
+                    const handleFileUpload = (e) => {
+                        const file = e.target.files[0];
+                        if (!file) return;
+
+                        const reader = new FileReader();
+                        reader.onload = (e) => {
+                            const data = e.target.result;
+                            let newUsers = [];
+
+                            if (file.name.endsWith(".txt")) {
+                                const lines = data.split(/\r?\n/);
+                                lines.forEach((line) => {
+                                    const name = line.trim();
+                                    if (name)
+                                        newUsers.push({
+                                            id: Date.now() + Math.random(),
+                                            name,
+                                            info: "",
+                                            status: 0,
+                                        });
+                                });
+                            } else {
+                                // Excel
+                                try {
+                                    const workbook = XLSX.read(data, {
+                                        type: "binary",
+                                    });
+                                    const sheetName = workbook.SheetNames[0];
+                                    const sheet = workbook.Sheets[sheetName];
+                                    const json = XLSX.utils.sheet_to_json(
+                                        sheet,
+                                        { header: 1 },
+                                    );
+
+                                    let startIndex = 0;
+                                    if (
+                                        json.length > 0 &&
+                                        (String(json[0][0]).includes("名") ||
+                                            String(json[0][0])
+                                                .toLowerCase()
+                                                .includes("name"))
+                                    ) {
+                                        startIndex = 1;
+                                    }
+
+                                    for (
+                                        let i = startIndex;
+                                        i < json.length;
+                                        i++
+                                    ) {
+                                        const row = json[i];
+                                        if (row && row[0]) {
+                                            newUsers.push({
+                                                id:
+                                                    Date.now() +
+                                                    Math.random() +
+                                                    i,
+                                                name: String(row[0]),
+                                                info: row[1]
+                                                    ? String(row[1])
+                                                    : "",
+                                                status: 0,
+                                            });
+                                        }
+                                    }
+                                } catch (err) {
+                                    console.error(err);
+                                    alert("Excel 解析失败，请检查文件格式");
+                                    return;
+                                }
+                            }
+
+                            if (newUsers.length > 0) {
+                                if (
+                                    store.users.length > 0 &&
+                                    confirm(
+                                        `解析到 ${newUsers.length} 条数据，是否覆盖现有数据？\n点击"确定"覆盖，点击"取消"追加。`,
+                                    )
+                                ) {
+                                    replaceUsers(newUsers);
+                                } else {
+                                    addUsers(newUsers);
+                                }
+                                alert("导入成功！");
+                                showSettings.value = false;
+                            } else {
+                                alert("未找到有效数据");
+                            }
+                        };
+
+                        if (file.name.endsWith(".txt")) {
+                            reader.readAsText(file);
+                        } else {
+                            reader.readAsBinaryString(file);
+                        }
+                        e.target.value = "";
+                    };
+
+                    const handleManualAdd = () => {
+                        const lines = manualInput.value.split("\n");
+                        let count = 0;
+                        const newUsers = [];
+                        lines.forEach((line) => {
+                            const name = line.trim();
+                            if (name) {
+                                newUsers.push({
+                                    id: Date.now() + Math.random(),
+                                    name,
+                                    info: "手动录入",
+                                    status: 0,
+                                });
+                                count++;
+                            }
+                        });
+                        manualInput.value = "";
+                        if (count > 0) {
+                            addUsers(newUsers);
+                            alert(`已添加 ${count} 人`);
+                        }
+                    };
+
+                    const handleReset = () => {
+                        if (
+                            confirm(
+                                "需要恢复为演示数据吗？\n\n点击【确定】恢复默认演示数据\n点击【取消】仅清空当前数据",
+                            )
+                        ) {
+                            localStorage.removeItem("lucky_draw_data_v2");
+                            location.reload();
+                        } else {
+                            if (confirm("确定要彻底清空所有数据吗？")) {
+                                resetAllData();
+                            }
+                        }
+                    };
+
+                    const handleScreenshot = async () => {
+                        try {
+                            // Capture screenshot directly without loading overlay
+                            const canvas = await html2canvas(document.body, {
+                                useCORS: true,
+                                allowTaint: true,
+                                backgroundColor: null,
+                                scale: window.devicePixelRatio || 1,
+                                logging: false,
+                                imageTimeout: 0,
+                                onclone: (clonedDoc) => {
+                                    // Ensure cloned document has proper background
+                                    clonedDoc.body.style.backgroundColor =
+                                        getComputedStyle(
+                                            document.body,
+                                        ).backgroundColor;
+                                },
+                            });
+
+                            // Convert to blob and download
+                            canvas.toBlob(
+                                (blob) => {
+                                    if (!blob) {
+                                        alert("截图生成失败");
+                                        return;
+                                    }
+
+                                    const url = URL.createObjectURL(blob);
+                                    const link = document.createElement("a");
+                                    link.href = url;
+
+                                    // Generate filename with timestamp
+                                    const now = new Date();
+                                    const pad = (n) =>
+                                        n.toString().padStart(2, "0");
+                                    const ts = `${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}_${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}`;
+                                    link.download = `抽奖截图_${ts}.png`;
+
+                                    // Trigger download
+                                    document.body.appendChild(link);
+                                    link.click();
+                                    document.body.removeChild(link);
+
+                                    // Cleanup
+                                    URL.revokeObjectURL(url);
+
+                                    // Show success toast
+                                    const toast = document.createElement("div");
+                                    toast.style.cssText =
+                                        "position:fixed;bottom:80px;left:50%;transform:translateX(-50%);z-index:99999;background:#22c55e;color:white;padding:12px 24px;border-radius:8px;font-size:14px;box-shadow:0 4px 12px rgba(0,0,0,0.3);";
+                                    toast.textContent = "✅ 截图已保存";
+                                    document.body.appendChild(toast);
+                                    setTimeout(() => toast.remove(), 2000);
+                                },
+                                "image/png",
+                                1.0,
+                            );
+                        } catch (e) {
+                            console.error("Screenshot error:", e);
+                            alert("截图失败: " + e.message);
+                        }
+                    };
+
+                    const handleExportHistory = () => {
+                        if (store.history.length === 0) {
+                            alert("暂无中奖记录可导出");
+                            return;
+                        }
+
+                        try {
+                            const exportData = [];
+                            exportData.push([
+                                "抽奖时间",
+                                "奖项名称",
+                                "随机种子",
+                                "中奖者姓名",
+                                "部门/信息",
+                                "唯一ID",
+                            ]);
+
+                            store.history.forEach((record) => {
+                                const time = record.time;
+                                const prize = record.prizeName;
+                                const seed = record.seed || "";
+
+                                record.winners.forEach((winner) => {
+                                    exportData.push([
+                                        time,
+                                        prize,
+                                        seed,
+                                        winner.name,
+                                        winner.info || "",
+                                        winner.id,
+                                    ]);
+                                });
+                            });
+
+                            const ws = XLSX.utils.aoa_to_sheet(exportData);
+                            const wb = XLSX.utils.book_new();
+                            XLSX.utils.book_append_sheet(wb, ws, "中奖名单");
+
+                            const now = new Date();
+                            const pad = (n) => n.toString().padStart(2, "0");
+                            const ts = `${now.getFullYear()}${pad(
+                                now.getMonth() + 1,
+                            )}${pad(now.getDate())}_${pad(now.getHours())}${pad(
+                                now.getMinutes(),
+                            )}`;
+                            XLSX.writeFile(wb, `中奖记录_${ts}.xlsx`);
+                        } catch (e) {
+                            console.error(e);
+                            alert("导出失败：" + e.message);
+                        }
+                    };
+
+                    const handleClearHistory = () => {
+                        if (
+                            confirm(
+                                "确定清空历史记录？(注意：用户中奖状态也会重置)",
+                            )
+                        ) {
+                            clearHistory();
+                            updateTargets(store.users);
+                        }
+                    };
+
+                    // -- Lifecycle --
+                    onMounted(() => {
+                        loadData();
+                        init3D("container", store.users);
+                        initSounds();
+
+                        // Initialize Resizable Sidebar
+                        setTimeout(() => {
+                            const sidebar = document.querySelector(
+                                "#app > div:first-child",
+                            );
+                            if (sidebar) {
+                                sidebar.style.width = "640px"; // Set initial explicit width
+                                sidebar.style.position = "relative";
+                                sidebar.classList.remove("w-[640px]");
+
+                                const resizer = document.createElement("div");
+                                resizer.style.cssText =
+                                    "position:absolute; top:0; right:0; width:8px; height:100%; cursor:col-resize; z-index:50; background:rgba(255,255,255,0.05); transition:background 0.2s;";
+                                resizer.title = "拖动调整宽度";
+                                resizer.addEventListener(
+                                    "mouseover",
+                                    () =>
+                                        (resizer.style.background =
+                                            "rgba(59, 130, 246, 0.5)"),
+                                );
+                                resizer.addEventListener(
+                                    "mouseout",
+                                    () =>
+                                        (resizer.style.background =
+                                            "rgba(255,255,255,0.05)"),
+                                );
+
+                                sidebar.appendChild(resizer);
+
+                                let isResizing = false;
+                                const onMouseMove = (e) => {
+                                    if (!isResizing) return;
+                                    const newWidth = Math.max(
+                                        300,
+                                        Math.min(
+                                            e.clientX,
+                                            window.innerWidth - 400,
+                                        ),
+                                    );
+                                    sidebar.style.width = newWidth + "px";
+                                    handleResize();
+                                };
+
+                                const onMouseUp = () => {
+                                    if (isResizing) {
+                                        isResizing = false;
+                                        document.body.style.cursor = "";
+                                        document.body.style.userSelect = "";
+                                        window.removeEventListener(
+                                            "mousemove",
+                                            onMouseMove,
+                                        );
+                                        window.removeEventListener(
+                                            "mouseup",
+                                            onMouseUp,
+                                        );
+                                    }
+                                };
+
+                                resizer.addEventListener("mousedown", (e) => {
+                                    isResizing = true;
+                                    document.body.style.cursor = "col-resize";
+                                    document.body.style.userSelect = "none";
+                                    window.addEventListener(
+                                        "mousemove",
+                                        onMouseMove,
+                                    );
+                                    window.addEventListener(
+                                        "mouseup",
+                                        onMouseUp,
+                                    );
+                                    e.preventDefault();
+                                });
+                            }
+                        }, 500);
+
+                        // Safety check
+                        window.addEventListener("beforeunload", (e) => {
+                            e.preventDefault();
+                            e.returnValue = "数据可能未保存，确定离开？";
+                            return "数据可能未保存，确定离开？";
+                        });
+                    });
+
+                    // Watchers
+                    watch(
+                        () => store.users,
+                        (newVal) => {
+                            updateTargets(newVal);
+                        },
+                        { deep: true },
+                    );
+
+                    // Watch theme for global body class application
+                    watch(
+                        () => store.config.theme,
+                        (newTheme) => {
+                            document.body.className = newTheme;
+                        },
+                        { immediate: true },
+                    );
+
+                    return {
+                        store,
+                        showSidebar,
+                        showSettings,
+                        showAlgoInfo,
+                        manualInput,
+                        winnerStats,
+                        toggleSidebar,
+                        toggleRunning,
+                        closeWinnersModal,
+                        regenerateSeed,
+                        handleFileUpload,
+                        handleManualAdd,
+                        handleReset,
+                        handleClearHistory,
+                        handleExportHistory,
+                        handleScreenshot,
+                        toggleSound: () => {
+                            soundEnabled = store.config.soundEnabled;
+                        },
+                        editTitle: () => {
+                            const newTitle = prompt(
+                                "请输入活动标题：",
+                                store.config.mainTitle,
+                            );
+                            if (newTitle) store.config.mainTitle = newTitle;
+                        },
+                    };
+                },
+            });
+
+            app.mount("#app");
+        </script>
+    </body>
+</html>
